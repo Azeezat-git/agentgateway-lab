@@ -8,14 +8,14 @@ gatewayApiCrds:
   path: gateway-api-crds
 
 kgatewayCrds:
-  repoURL: oci://cr.kgateway.dev/kgateway-dev/charts/kgateway-crds
-  #chart: kgateway-dev/charts/kgateway-crds
+  repoURL: oci://cr.kgateway.dev/kgateway-dev/charts
+  chart: kgateway-crds
   targetRevision: v2.1.1
   namespace: kgateway-system
 
 kgateway:
-  repoURL: oci://cr.kgateway.dev/kgateway-dev/charts/kgateway
-  #chart: kgateway-dev/charts/kgateway
+  repoURL: oci://cr.kgateway.dev/kgateway-dev/charts
+  chart: kgateway
   targetRevision: v2.1.1
   namespace: kgateway-system
   values:
