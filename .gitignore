@@ -3,3 +3,7 @@ agent-secrets.yaml
 agentgateway-secrets.yaml
 *-secrets.yaml
 secrets/
+
+# local-only secrets
+infra/secrets/
+*-secrets.yaml
