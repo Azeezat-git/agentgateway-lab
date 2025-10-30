@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+ # repository: ghcr.io/tiangolo/uvicorn-gunicorn-fastapi
+  repository: python
+  tag: python3.11
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+resources: {}
+
+env:
+  AGENTGATEWAY_BASE_URL: "http://agentgateway.kgateway-system.svc.cluster.local:8080"
+  OPENAI_API_BASE: "/v1"
+  LLM_MODEL: "gpt-4o-mini"
+  PINECONE_NAMESPACE: ""
+
+pineconeSecretName: agent-secrets

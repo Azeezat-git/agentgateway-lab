@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-init
+data:
+  main.py: |
+    from fastapi import FastAPI
+    from pydantic import BaseModel
+    import os, httpx, json
+    from pinecone import Pinecone, ServerlessSpec
+
+    app = FastAPI()
+
+    AGW_BASE = os.getenv("AGENTGATEWAY_BASE_URL", "http://localhost:8080")
+    OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "/v1")
+    MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+
+    PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+    PINECONE_HOST = os.getenv("PINECONE_HOST")  # full host for serverless index
+    PINECONE_NAMESPACE = os.getenv("PINECONE_NAMESPACE", "")
+    PINECONE_INDEX = os.getenv("PINECONE_INDEX")
+    PINECONE_ENV = os.getenv("PINECONE_ENV")
+
+    class ChatRequest(BaseModel):
+        messages: list
+
+    class MemoryItem(BaseModel):
+        id: str
+        text: str
+        metadata: dict | None = None
+
+    class QueryRequest(BaseModel):
+        text: str
+        top_k: int = 5
+
+    @app.get("/healthz")
+    def healthz():
+        return {"ok": True}
+
+    @app.post("/chat")
+    async def chat(req: ChatRequest):
+        url = f"{AGW_BASE}{OPENAI_API_BASE}/chat/completions"
+        payload = {"model": MODEL, "messages": req.messages}
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(url, json=payload)
+            r.raise_for_status()
+            return r.json()
+
+    def _pinecone_client():
+        if not PINECONE_API_KEY or not PINECONE_HOST or not PINECONE_INDEX:
+            raise RuntimeError("Missing Pinecone configuration")
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+        index = pc.Index(host=PINECONE_HOST)
+        return index
+
+    @app.post("/memory/remember")
+    def remember(item: MemoryItem):
+        index = _pinecone_client()
+        # simple embed via Agentgateway embeddings
+        embed_url = f"{AGW_BASE}{OPENAI_API_BASE}/embeddings"
+        payload = {"model": "text-embedding-3-small", "input": item.text}
+        vec = None
+        with httpx.Client(timeout=60) as client:
+            er = client.post(embed_url, json=payload)
+            er.raise_for_status()
+            data = er.json()
+            # OpenAI-compatible embeddings response
+            vec = data["data"][0]["embedding"]
+        index.upsert(vectors=[{"id": item.id, "values": vec, "metadata": item.metadata or {}}], namespace=PINECONE_NAMESPACE or None)
+        return {"status": "ok"}
+
+    @app.post("/memory/recall")
+    def recall(q: QueryRequest):
+        index = _pinecone_client()
+        # embed the query text
+        embed_url = f"{AGW_BASE}{OPENAI_API_BASE}/embeddings"
+        payload = {"model": "text-embedding-3-small", "input": q.text}
+        with httpx.Client(timeout=60) as client:
+            er = client.post(embed_url, json=payload)
+            er.raise_for_status()
+            vec = er.json()["data"][0]["embedding"]
+        res = index.query(vector=vec, top_k=q.top_k, include_values=False, include_metadata=True, namespace=PINECONE_NAMESPACE or None)
+        return json.loads(res.model_dump_json())

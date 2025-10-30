@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  labels:
+    app: agent
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: agent
+  template:
+    metadata:
+      labels:
+        app: agent
+    spec:
+      initContainers:
+        - name: install-deps
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["sh", "-lc"]
+          args:
+            - |
+              pip install --no-cache-dir fastapi uvicorn httpx pinecone-client --target /deps
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+        - name: prepare-app
+          image: alpine:3.20
+          command: ["sh", "-lc"]
+          args:
+            - |
+              cp /init/main.py /workdir/main.py
+          volumeMounts:
+            - name: init-scripts
+              mountPath: /init
+            - name: workdir
+              mountPath: /workdir
+      containers:
+        - name: agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: PYTHONPATH
+              value: "/deps"
+            - name: AGENTGATEWAY_BASE_URL
+              value: "{{ .Values.env.AGENTGATEWAY_BASE_URL }}"
+            - name: OPENAI_API_BASE
+              value: "{{ .Values.env.OPENAI_API_BASE }}"
+            - name: LLM_MODEL
+              value: "{{ .Values.env.LLM_MODEL }}"
+            - name: PINECONE_NAMESPACE
+              value: "{{ .Values.env.PINECONE_NAMESPACE }}"
+            - name: PINECONE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pineconeSecretName }}
+                  key: PINECONE_API_KEY
+            - name: PINECONE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pineconeSecretName }}
+                  key: PINECONE_HOST
+            - name: PINECONE_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pineconeSecretName }}
+                  key: PINECONE_ENV
+            - name: PINECONE_INDEX
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pineconeSecretName }}
+                  key: PINECONE_INDEX
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+          volumeMounts:
+            - name: workdir
+              mountPath: /app
+            - name: deps
+              mountPath: /deps
+          workingDir: /app
+          command: ["python", "-m", "uvicorn"]
+          args:
+            - main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: agent-init
+            items:
+              - key: main.py
+                path: main.py
+        - name: workdir
+          emptyDir: {}
+        - name: deps
+          emptyDir: {}
