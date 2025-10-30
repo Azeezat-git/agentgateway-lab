@@ -6,6 +6,7 @@ metadata:
 spec:
   parentRefs:
     - name: agentgateway
+      sectionName: http
   rules:
     - matches:
         - path:
