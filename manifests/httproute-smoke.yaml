@@ -29,5 +29,5 @@ metadata:
   name: dr-ok
   namespace: kgateway-system
 spec:
-  statusCode: 200
+  status: 200
   body: "ok"
