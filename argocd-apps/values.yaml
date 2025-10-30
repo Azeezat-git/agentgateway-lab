@@ -3,10 +3,26 @@ global:
     server: https://172.31.45.157:33893
     project: default
 
-paths:
-  agentgatewayManifests: agentgateway-lab/manifests/agentgateway
-  agentChart: agentgateway-lab/charts/agent
+gatewayApiCrds:
+  path: agentgateway-lab/gateway-api-crds
 
-namespaces:
-  agentgateway: agentgateway
-  agent: agent
+kgatewayCrds:
+  repoURL: oci://cr.kgateway.dev/kgateway-dev/charts
+  chart: kgateway-crds
+  targetRevision: v2.2.0-main
+  namespace: kgateway-system
+
+kgateway:
+  repoURL: oci://cr.kgateway.dev/kgateway-dev/charts
+  chart: kgateway
+  targetRevision: v2.2.0-main
+  namespace: kgateway-system
+  values:
+    agentgateway:
+      enabled: true
+    controller:
+      image:
+        pullPolicy: Always
+
+gatewayManifest:
+  path: agentgateway-lab/manifests

@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kgateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: {{ .Values.global.destination.project }}
+  source:
+    repoURL: {{ .Values.kgateway.repoURL }}
+    chart: {{ .Values.kgateway.chart }}
+    targetRevision: {{ .Values.kgateway.targetRevision }}
+    helm:
+      values: |
+{{ toYaml .Values.kgateway.values | indent 8 }}
+  destination:
+    server: {{ .Values.global.destination.server }}
+    namespace: {{ .Values.kgateway.namespace }}
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

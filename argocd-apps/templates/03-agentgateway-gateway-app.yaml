@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentgateway-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: {{ .Values.global.destination.project }}
+  source:
+    repoURL: https://github.com/Azeezat-git/agentgateway-lab.git
+    targetRevision: main
+    path: {{ .Values.gatewayManifest.path }}
+  destination:
+    server: {{ .Values.global.destination.server }}
+    namespace: kgateway-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

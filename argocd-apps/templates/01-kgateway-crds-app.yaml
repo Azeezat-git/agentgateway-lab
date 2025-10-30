@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kgateway-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: {{ .Values.global.destination.project }}
+  source:
+    repoURL: {{ .Values.kgatewayCrds.repoURL }}
+    chart: {{ .Values.kgatewayCrds.chart }}
+    targetRevision: {{ .Values.kgatewayCrds.targetRevision }}
+  destination:
+    server: {{ .Values.global.destination.server }}
+    namespace: {{ .Values.kgatewayCrds.namespace }}
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
