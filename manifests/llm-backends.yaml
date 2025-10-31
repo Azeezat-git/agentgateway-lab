@@ -1,0 +1,37 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: openai
+  namespace: kgateway-system
+  labels:
+    app: agentgateway
+spec:
+  type: AI
+  ai:
+    llm:
+      openai:
+        authToken:
+          kind: SecretRef
+          secretRef:
+            name: openai-secret
+        model: "gpt-4o-mini"
+
+---
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: groq
+  namespace: kgateway-system
+  labels:
+    app: agentgateway
+spec:
+  type: AI
+  ai:
+    llm:
+      openai:
+        authToken:
+          kind: SecretRef
+          secretRef:
+            name: groq-secret
+        baseUrl: "https://api.groq.com/openai/v1"
+        model: "llama-3.1-70b-versatile"
