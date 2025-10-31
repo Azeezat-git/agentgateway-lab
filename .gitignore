@@ -7,3 +7,4 @@ secrets/
 # local-only secrets
 infra/secrets/
 *-secrets.yaml
+manifests/llm-secrets.yaml
