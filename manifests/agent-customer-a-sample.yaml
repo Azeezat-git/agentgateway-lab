@@ -1,0 +1,34 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: sample-agent
+  namespace: customer-a
+spec:
+  # These top-level fields are required for the declarative Agent type:
+  description: "Sample agent with Agentgateway LLM and Kubernetes tools."
+  type: Declarative
+  
+  # All core functionality (Model, Prompt, Tools) is nested inside 'declarative':
+  declarative:
+    # 1. Links to the ModelConfig resource (which points to Agentgateway)
+    modelConfig: agentgateway-smart
+    stream: true
+    
+    # 2. Agent Persona (System Prompt)
+    systemMessage: |
+      You are a helpful Kubernetes assistant that uses Agentgateway for LLM access.
+      You have access to Kubernetes tools - USE THEM to answer questions about the cluster.
+      Always use tools first before answering questions about Kubernetes.
+      
+    # 3. Tool Definitions (linking to the MCP ToolServer resource)
+    tools:
+    - type: McpServer
+      mcpServer:
+        apiGroup: kagent.dev
+        kind: RemoteMCPServer
+        name: kagent-tool-server 
+        toolNames:
+        - k8s_get_available_api_resources
+        - k8s_get_resources
+        - k8s_get_pod_logs
+        - k8s_describe_resource

@@ -1,0 +1,13 @@
+apiVersion: kagent.dev/v1alpha1
+kind: Memory
+metadata:
+  name: pinecone-memory
+  namespace: customer-a
+spec:
+  provider: Pinecone
+  apiKeySecretRef: pinecone-secret
+  apiKeySecretKey: PINECONE_API_KEY
+  pinecone:
+    indexHost: https://agentgateindex-gy9f1iv.svc.aped-4627-b74a.pinecone.io
+    topK: 5
+    scoreThreshold: "0.7"

@@ -1,0 +1,18 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: openai-smart # <-- Logical name of this policy/backend
+  namespace: kgateway-system
+spec:
+  type: AI
+  ai:
+    llm:
+      openai:
+        # 1. THE MAPPING LOCATION: This field explicitly tells the agentgateway
+        # to use this specific model ID for all traffic routed here.
+        model: "gpt-4o-mini" 
+        authToken:
+          kind: SecretRef
+          secretRef:
+            name: openai-secret
+#            namespace: kgateway-system
