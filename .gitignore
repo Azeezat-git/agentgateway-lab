@@ -8,3 +8,4 @@ secrets/
 infra/secrets/
 *-secrets.yaml
 manifests/llm-secrets.yaml
+trafficpolicy-customer-b.yaml

@@ -1,0 +1,27 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: customer-b-agent
+  namespace: customer-b
+spec:
+  type: Declarative
+  description: "Customer B agent with Agentgateway OpenAI LLM (gpt-3.5-turbo), Kubernetes tools, and MCP"
+  declarative:
+    modelConfig: agentgateway-openai-b
+    stream: true
+    systemMessage: |
+      You're a helpful Kubernetes assistant that uses Agentgateway for LLM access.
+      You have access to Kubernetes tools - USE THEM to answer questions about the cluster.
+      When asked about pods, namespaces, or resources, use your tools to query the cluster.
+      Always use tools first before answering questions about Kubernetes.
+    tools:
+    - type: McpServer
+      mcpServer:
+        apiGroup: kagent.dev
+        kind: RemoteMCPServer
+        name: kagent-tool-server
+        toolNames:
+        - k8s_get_available_api_resources
+        - k8s_get_resources
+        - k8s_get_pod_logs
+        - k8s_describe_resource

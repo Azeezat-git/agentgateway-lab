@@ -1,0 +1,12 @@
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: agentgateway-openai-b
+  namespace: customer-b
+spec:
+  provider: OpenAI
+  model: smart-llm-openai-b
+  apiKeySecret: agentgateway-dummy-key-b
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: "http://agentgateway.kgateway-system.svc.cluster.local:8080/customer-b/v1"
