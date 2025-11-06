@@ -1,0 +1,57 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: new-agent
+  namespace: customer-a
+spec:
+  description: "New agent with A2A capabilities for Kubernetes resource management"
+  type: Declarative
+  declarative:
+    modelConfig: agentgateway-smart
+    systemMessage: |
+      You are a new agent that provides Kubernetes resource management capabilities.
+      You are called by other agents via A2A when they need your expertise.
+      Always provide thorough, technical responses when called by other agents.
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: kagent-tool-server
+          kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_available_api_resources
+            - k8s_describe_resource
+    # THIS IS THE KEY - a2aConfig goes INSIDE declarative section!
+    a2aConfig:
+      skills:
+        - id: get-resource-info-skill
+          name: Get Resource Info
+          description: Get detailed information about Kubernetes resources
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - k8s
+            - resources
+            - info
+          examples:
+            - "Get info about pods in default namespace"
+            - "Show me details about deployments in customer-a"
+            - "List all services in kagent namespace"
+        
+        - id: analyze-resource-status-skill
+          name: Analyze Resource Status
+          description: Analyze the status and health of Kubernetes resources
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - k8s
+            - analysis
+            - status
+          examples:
+            - "Analyze status of pods in default namespace"
+            - "Check health of deployments in customer-a"
+            - "Review resource status in kagent namespace"

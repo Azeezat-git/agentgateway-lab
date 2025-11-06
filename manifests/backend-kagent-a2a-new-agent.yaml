@@ -1,0 +1,16 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: Backend
+metadata:
+  name: kagent-a2a-new-agent-backend
+  namespace: kgateway-system
+  labels:
+    app: agentgateway
+spec:
+  type: Static
+  static:
+    hosts:
+      - host: kagent-controller.kagent.svc.cluster.local
+        port: 8083
+  # A2A configuration at backend level
+#  policies:
+#    a2a: {}

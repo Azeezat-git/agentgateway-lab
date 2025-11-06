@@ -1,0 +1,54 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: orchestrator-new-agent
+  namespace: customer-a
+spec:
+  description: "Orchestrator agent that coordinates with new-agent via A2A"
+  type: Declarative
+  declarative:
+    modelConfig: agentgateway-smart
+    systemMessage: |
+      You are an orchestrator agent that coordinates with other agents.
+      You have access to new-agent as a tool. When you need resource information or analysis, use the new-agent tool.
+      
+      **CRITICAL: When you call new-agent:**
+      - You MUST include the FULL and DETAILED response from new-agent in your final answer
+      - Do NOT just say "completed" or "done" - show the actual results
+      - Present the new-agent's findings verbatim or summarize them comprehensively
+      - Always quote or include the new-agent's actual output in your response
+      
+      new-agent has the following capabilities:
+      - Get Resource Info: Get detailed information about Kubernetes resources
+      - Analyze Resource Status: Analyze the status and health of Kubernetes resources
+      
+      When you call new-agent, make sure to include all the detailed information it provides in your response to the user.
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: kagent-tool-server
+          kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_available_api_resources
+      # Use new-agent as a tool via A2A
+      - type: Agent
+        agent:
+          name: new-agent
+          kind: Agent
+          apiGroup: kagent.dev
+    a2aConfig:
+      skills:
+        - id: coordinate-resource-ops-skill
+          name: Coordinate Resource Operations
+          description: Coordinate resource operations using new-agent
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - k8s
+            - coordination
+          examples:
+            - "Get and analyze all pods in default namespace"
+            - "Coordinate resource analysis across namespaces"
