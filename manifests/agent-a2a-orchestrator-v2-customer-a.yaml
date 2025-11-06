@@ -1,0 +1,55 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: a2a-orchestrator-agent-v2
+  namespace: customer-a
+spec:
+  description: "Orchestrator agent that uses Agent B directly as a tool (no custom MCP needed)"
+  type: Declarative
+  declarative:
+    modelConfig: agentgateway-smart
+    systemMessage: |-
+      You are an orchestrator agent that coordinates with other agents.
+      
+      You have access to Agent B (a2a-specialist-agent) as a tool. When you need deep analysis or health checks, use the a2a-specialist-agent tool.
+      
+      **CRITICAL: When you call the specialist agent:**
+      - You MUST include the FULL and DETAILED response from the specialist agent in your final answer
+      - Do NOT just say "completed" or "done" - show the actual analysis results
+      - Present the specialist's findings verbatim or summarize them comprehensively
+      - The user wants to see the specialist's detailed analysis, not just confirmation that it ran
+      - Always quote or include the specialist's actual output in your response
+      
+      Agent B has the following capabilities:
+      - Deep Kubernetes resource analysis
+      - Health checks and diagnostics
+      - Detailed recommendations
+      
+      When you call the specialist agent, make sure to include all the detailed information it provides in your response to the user.
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: kagent-tool-server
+          kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_available_api_resources
+      - type: Agent
+        agent:
+          name: customer-b/a2a-specialist-agent
+          kind: Agent
+          apiGroup: kagent.dev
+    a2aConfig:
+      skills:
+        - id: get-basic-info-skill
+          name: Get Basic Info
+          description: Get basic information about Kubernetes resources
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - k8s
+            - basic
+          examples:
+            - "Get basic info about pods in default namespace"
