@@ -1,0 +1,56 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: a2a-specialist-agent
+  namespace: customer-b
+spec:
+  description: "Specialist agent with deep analysis capabilities, called via A2A"
+  type: Declarative
+  declarative:
+    modelConfig: agentgateway-openai-b
+    systemMessage: |-
+      You are a specialist agent with deep Kubernetes analysis capabilities.
+      You are called by other agents via A2A when they need your expertise.
+      You provide detailed analysis, health checks, and recommendations.
+      Always provide thorough, technical responses when called by other agents.
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: kagent-tool-server
+          kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+            - k8s_get_pod_logs
+            - k8s_describe_resource
+    a2aConfig:
+      skills:
+        - id: analyze-k8s-health-skill
+          name: Analyze K8s Health
+          description: Perform deep health analysis of Kubernetes resources
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - k8s
+            - health
+            - analysis
+          examples:
+            - "Analyze health of pods in default namespace"
+            - "Check health status of deployments in customer-a"
+            - "Perform health analysis of all resources in kagent namespace"
+        - id: deep-resource-analysis-skill
+          name: Deep Resource Analysis
+          description: Provide detailed analysis and recommendations for resources
+          inputModes:
+            - text
+          outputModes:
+            - text
+          tags:
+            - k8s
+            - analysis
+            - deep-dive
+          examples:
+            - "Analyze the sample-agent pod in detail"
+            - "Provide deep analysis of deployments in customer-b"
+            - "Give detailed recommendations for resource optimization"

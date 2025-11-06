@@ -1,0 +1,320 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: a2a-caller-mcp
+  namespace: kagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: a2a-caller-mcp
+  template:
+    metadata:
+      labels:
+        app: a2a-caller-mcp
+    spec:
+      containers:
+      - name: mcp-server
+        image: python:3.11-slim
+        ports:
+        - containerPort: 8085
+        command: ["python3", "-c"]
+        args:
+        - |
+          import http.server
+          import socketserver
+          import json
+          import urllib.request
+          import urllib.parse
+          import uuid
+          import sys
+          
+          class MCPHandler(http.server.BaseHTTPRequestHandler):
+              def do_POST(self):
+                  if self.path == '/mcp' or self.path.startswith('/mcp/'):
+                      print(f"[MCP] POST request to {self.path}", flush=True, file=sys.stderr)
+                      content_length = int(self.headers.get('Content-Length', 0))
+                      if content_length == 0:
+                          print("[MCP] Error: No content length", flush=True, file=sys.stderr)
+                          self.send_response(400)
+                          self.end_headers()
+                          return
+                      post_data = self.rfile.read(content_length)
+                      try:
+                          request = json.loads(post_data.decode('utf-8'))
+                          method = request.get('method')
+                          request_id = request.get('id')
+                          print(f"[MCP] Method: {method}, ID: {request_id}", flush=True, file=sys.stderr)
+                          
+                          # Handle MCP initialize
+                          if method == 'initialize':
+                              print("[MCP] Handling initialize request", flush=True, file=sys.stderr)
+                              self.send_response(200)
+                              self.send_header('Content-Type', 'application/json')
+                              self.end_headers()
+                              response = {
+                                  "jsonrpc": "2.0",
+                                  "id": request_id,
+                                  "result": {
+                                      "protocolVersion": "2024-11-05",
+                                      "capabilities": {
+                                          "tools": {}
+                                      },
+                                      "serverInfo": {
+                                          "name": "a2a-caller-mcp",
+                                          "version": "1.0.0"
+                                      }
+                                  }
+                              }
+                              self.wfile.write(json.dumps(response).encode('utf-8'))
+                              print(f"[MCP] Initialize response sent", flush=True, file=sys.stderr)
+                              return
+                          
+                          # Handle MCP tool calls
+                          elif method == 'tools/call':
+                              tool_name = request['params'].get('name')
+                              print(f"[MCP] Tool call requested: {tool_name}", flush=True, file=sys.stderr)
+                              if tool_name == 'call_agent_via_a2a':
+                                  args = request['params'].get('arguments', {})
+                                  agent_url = args.get('agent_url')
+                                  skill = args.get('skill')
+                                  message_text = args.get('message')
+                                  print(f"[MCP] A2A Call - URL: {agent_url}, Skill: {skill}, Message: {message_text[:100]}...", flush=True, file=sys.stderr)
+                                  
+                                  # Build A2A request with correct format
+                                  message_id = str(uuid.uuid4())
+                                  a2a_request = {
+                                      "jsonrpc": "2.0",
+                                      "method": "message/stream",
+                                      "params": {
+                                          "message": {
+                                              "kind": "message",
+                                              "messageId": message_id,
+                                              "role": "user",
+                                              "parts": [{
+                                                  "kind": "text",
+                                                  "text": message_text
+                                              }],
+                                              "metadata": {
+                                                  "displaySource": "a2a-caller"
+                                              }
+                                          },
+                                          "metadata": {}
+                                      },
+                                      "id": str(uuid.uuid4())
+                                  }
+                                  
+                                  # Add skill if provided
+                                  if skill:
+                                      a2a_request["params"]["skill"] = skill
+                                  
+                                  print(f"[MCP] Making HTTP request to {agent_url}", flush=True, file=sys.stderr)
+                                  req = urllib.request.Request(
+                                      agent_url.rstrip('/') + '/',
+                                      json.dumps(a2a_request).encode('utf-8'),
+                                      {"Content-Type": "application/json"}
+                                  )
+                                  
+                                  try:
+                                      with urllib.request.urlopen(req, timeout=60) as response:
+                                          print(f"[MCP] HTTP response received: {response.status}", flush=True, file=sys.stderr)
+                                          # Handle SSE stream response
+                                          response_text = ""
+                                          artifact_text = ""
+                                          
+                                          # Read SSE stream
+                                          for line in response:
+                                              line_str = line.decode('utf-8').strip()
+                                              
+                                              # Parse SSE format: event: <name> and data: <json>
+                                              if line_str.startswith('data:'):
+                                                  data_json = line_str[5:].strip()  # Remove 'data: '
+                                                  try:
+                                                      data = json.loads(data_json)
+                                                      result = data.get('result', {})
+                                                      
+                                                      # Check for artifact update (final response)
+                                                      if result.get('kind') == 'artifact-update':
+                                                          artifact = result.get('artifact', {})
+                                                          parts = artifact.get('parts', [])
+                                                          for part in parts:
+                                                              if part.get('kind') == 'text':
+                                                                  artifact_text = part.get('text', '')
+                                                          
+                                                          # If lastChunk, this is the final response
+                                                          if result.get('lastChunk'):
+                                                              response_text = artifact_text
+                                                              print(f"[MCP] Final artifact received, length: {len(response_text)}", flush=True, file=sys.stderr)
+                                                              break
+                                                      
+                                                      # Check for status update with message (intermediate responses)
+                                                      elif result.get('kind') == 'status-update':
+                                                          status = result.get('status', {})
+                                                          if status.get('state') == 'completed':
+                                                              # Task completed, use last artifact if available
+                                                              if artifact_text:
+                                                                  response_text = artifact_text
+                                                              print(f"[MCP] Task completed, response length: {len(response_text)}", flush=True, file=sys.stderr)
+                                                              break
+                                                          elif status.get('message'):
+                                                              msg = status.get('message', {})
+                                                              parts = msg.get('parts', [])
+                                                              for part in parts:
+                                                                  if part.get('kind') == 'text':
+                                                                      # Collect intermediate text
+                                                                      if not artifact_text:
+                                                                          artifact_text = part.get('text', '')
+                                                  except json.JSONDecodeError as e:
+                                                      print(f"[MCP] JSON decode error: {e}", flush=True, file=sys.stderr)
+                                                      continue
+                                          
+                                          # Use artifact text if available, otherwise use collected text
+                                          if not response_text and artifact_text:
+                                              response_text = artifact_text
+                                          
+                                          if not response_text:
+                                              response_text = "Agent response received but no text content found"
+                                              print("[MCP] Warning: No text content in response", flush=True, file=sys.stderr)
+                                          
+                                          print(f"[MCP] Returning response to agent, length: {len(response_text)}", flush=True, file=sys.stderr)
+                                          self.send_response(200)
+                                          self.send_header('Content-Type', 'application/json')
+                                          self.end_headers()
+                                          self.wfile.write(json.dumps({
+                                              "jsonrpc": "2.0",
+                                              "id": request_id,
+                                              "result": {
+                                                  "content": [{
+                                                      "type": "text",
+                                                      "text": response_text
+                                                  }]
+                                              }
+                                          }).encode('utf-8'))
+                                  except urllib.error.HTTPError as e:
+                                      error_body = e.read().decode('utf-8') if e.fp else "No error details"
+                                      print(f"[MCP] HTTP Error {e.code}: {error_body[:200]}", flush=True, file=sys.stderr)
+                                      self.send_response(200)
+                                      self.send_header('Content-Type', 'application/json')
+                                      self.end_headers()
+                                      self.wfile.write(json.dumps({
+                                          "jsonrpc": "2.0",
+                                          "id": request_id,
+                                          "error": {"message": f"HTTP {e.code}: {error_body[:200]}"}
+                                      }).encode('utf-8'))
+                                  except Exception as e:
+                                      print(f"[MCP] Exception: {type(e).__name__}: {str(e)}", flush=True, file=sys.stderr)
+                                      self.send_response(200)
+                                      self.send_header('Content-Type', 'application/json')
+                                      self.end_headers()
+                                      self.wfile.write(json.dumps({
+                                          "jsonrpc": "2.0",
+                                          "id": request_id,
+                                          "error": {"message": str(e)}
+                                      }).encode('utf-8'))
+                              else:
+                                  print(f"[MCP] Unknown tool: {tool_name}", flush=True, file=sys.stderr)
+                                  self.send_response(200)
+                                  self.send_header('Content-Type', 'application/json')
+                                  self.end_headers()
+                                  self.wfile.write(json.dumps({
+                                      "jsonrpc": "2.0",
+                                      "id": request_id,
+                                      "error": {"message": "Unknown tool"}
+                                  }).encode('utf-8'))
+                          # Handle MCP tools/list
+                          elif method == 'tools/list':
+                              print("[MCP] Handling tools/list request", flush=True, file=sys.stderr)
+                              self.send_response(200)
+                              self.send_header('Content-Type', 'application/json')
+                              self.end_headers()
+                              self.wfile.write(json.dumps({
+                                  "jsonrpc": "2.0",
+                                  "id": request_id,
+                                  "result": {
+                                      "tools": [{
+                                          "name": "call_agent_via_a2a",
+                                          "description": "Call another agent via A2A protocol",
+                                          "inputSchema": {
+                                              "type": "object",
+                                              "properties": {
+                                                  "agent_url": {
+                                                      "type": "string",
+                                                      "description": "Full A2A URL (e.g., http://agentgateway.kgateway-system.svc.cluster.local:8080/a2a/customer-b/a2a-specialist-agent/)"
+                                                  },
+                                                  "skill": {
+                                                      "type": "string",
+                                                      "description": "Skill ID to call (e.g., analyze-k8s-health-skill, deep-resource-analysis-skill). Optional."
+                                                  },
+                                                  "message": {
+                                                      "type": "string",
+                                                      "description": "Message to send to the agent"
+                                                  }
+                                              },
+                                              "required": ["agent_url", "message"]
+                                          }
+                                      }]
+                                  }
+                              }).encode('utf-8'))
+                          else:
+                              print(f"[MCP] Unknown method: {method}", flush=True, file=sys.stderr)
+                              self.send_response(200)
+                              self.send_header('Content-Type', 'application/json')
+                              self.end_headers()
+                              self.wfile.write(json.dumps({
+                                  "jsonrpc": "2.0",
+                                  "id": request_id,
+                                  "error": {"code": -32601, "message": f"Method not found: {method}"}
+                              }).encode('utf-8'))
+                      except json.JSONDecodeError as e:
+                          print(f"[MCP] JSON decode error: {e}", flush=True, file=sys.stderr)
+                          self.send_response(400)
+                          self.send_header('Content-Type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(json.dumps({"error": "Invalid JSON"}).encode('utf-8'))
+                      except Exception as e:
+                          print(f"[MCP] Unexpected error: {type(e).__name__}: {str(e)}", flush=True, file=sys.stderr)
+                          self.send_response(500)
+                          self.send_header('Content-Type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+                  else:
+                      print(f"[MCP] 404 for path: {self.path}", flush=True, file=sys.stderr)
+                      self.send_response(404)
+                      self.end_headers()
+              
+              def log_message(self, format, *args):
+                  pass
+          
+          PORT = 8085
+          print(f"[MCP] Starting server on port {PORT}", flush=True, file=sys.stderr)
+          with socketserver.TCPServer(("", PORT), MCPHandler) as httpd:
+              httpd.serve_forever()
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2a-caller-mcp
+  namespace: kagent
+spec:
+  selector:
+    app: a2a-caller-mcp
+  ports:
+  - port: 8085
+    targetPort: 8085
+---
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: a2a-caller-mcp
+  namespace: customer-a
+spec:
+  description: "MCP server for making A2A calls to other agents"
+  protocol: STREAMABLE_HTTP
+  sseReadTimeout: 5m0s
+  terminateOnClose: true
+  timeout: 30s
+  url: http://a2a-caller-mcp.kagent:8085/mcp
